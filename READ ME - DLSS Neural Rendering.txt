@@ -1,0 +1,157 @@
+DLSS 5 Neural Rendering for OptiScaler
+======================================
+an attempt at DLSS Neural Rendering, by dag
+
+This is OptiScaler with an extra pass: NVIDIA's Neural Rendering model, run over the upscaler's output
+to synthesise detail. NVIDIA ships no public integration for it, so it is driven directly. Nothing here
+is officially supported and none of it is documented by NVIDIA.
+
+The colour composition -- how the model's answer is brought back into your frame -- is taken from
+RenoDX's DLSS 5 addon by clshortfuse (github.com/clshortfuse/renodx), used under its MIT licence. See
+Licenses/RenoDX_ATTRIBUTION.txt. It is their design and it is the reason the colour holds together.
+
+
+Installing
+----------
+
+1. Extract every file in this archive into the game folder -- the one holding the game's .exe. For most
+   games that is where the executable sits; for Cyberpunk 2077 it is bin\x64.
+
+2. Run setup_windows.bat and answer its questions. It renames OptiScaler.dll to whatever the game will
+   load (dxgi.dll suits most DirectX 12 games) and writes an uninstaller next to it.
+
+3. Put nvngx_dlssnr.dll in that same folder.
+
+   This is the model itself. It comes from an NVIDIA driver package and cannot be shipped here, so you
+   have to supply it. One copy per game -- there is no shared or system-wide location, and no way to
+   install it once for everything.
+
+   The installer looks for it and tells you whether it is there.
+
+4. Launch the game, open the OptiScaler overlay, and turn on "Enable Neural Rendering" under DLSS Neural
+   Rendering. It is off by default.
+
+
+What it needs
+-------------
+
+- An RTX 50 series card. The model does not run on anything older.
+- A driver new enough to ship nvngx_dlssnr.dll.
+- A game that already uses DLSS, on DirectX 12.
+
+That last one is not a limitation of the model so much as of how it gets its inputs. Neural Rendering
+needs depth and motion vectors, and rather than hunting for them in the game's own frame graph, this
+reads the ones the game already hands to DLSS every frame. That is what makes it work in any DLSS title
+without per-game work -- and why it does nothing in a game that has no DLSS to intercept.
+
+DirectX 11 games work through the same interception -- the pass rides the D3D11-on-D3D12 bridge that
+already carries their upscaler, so nothing extra is needed. Native Vulkan is supported too.
+
+
+If it does not run
+------------------
+
+The overlay says why, under the enable checkbox, rather than failing quietly. The usual answers:
+
+  "nvngx.dll_dlssnr.dll is missing"   That file is part of this archive. Extract all of it.
+  "nvngx_dlssnr.dll was not found"    Step 3 above.
+  "the model would not initialise"    Usually an older card or a driver without the model.
+
+OptiScaler.log in the same folder has more, if logging is on.
+
+
+Where it runs
+-------------
+
+Immediately after the game's upscaler, on the same command list, before the interface is drawn. That
+placement is the whole design: the model never sees your HUD, so it cannot synthesise detail into text
+and icons, and there is no detection or masking involved -- the UI simply is not there yet.
+
+With frame generation, the pass runs once per rendered frame and generated frames inherit the result.
+It costs one run per rendered frame, not per presented frame.
+
+
+How your frame is put back together
+-----------------------------------
+
+The model is shown a display-referred version of the upscaler's output, because that is the kind of
+picture it was trained on. What it hands back is not treated as a difference to add onto your frame --
+it is a complete picture in its own right, rescaled so its brightness sits where your original says it
+should, with its hue held in place.
+
+That matters because the two controls below then blend between finished pictures rather than adding
+anything, so neither can push a colour somewhere the model never asked for.
+
+
+The controls
+------------
+
+Most of them are the model's own and are undocumented; the tooltips say which ones are guesses.
+
+The two that matter most:
+
+  Detail strength    How far the frame moves toward the model's picture. 0 gives back exactly what the
+                     upscaler produced -- a true bypass. 1 is the model's picture. Above 1 carries on
+                     past it, which the model never asked for, but it is the quickest way to see what
+                     it is contributing. This is the control to push if you want more effect.
+
+  Colour strength    Whether the model's colour arrives with its light. At 0 you keep the game's own
+                     colour exactly and only the brightness carries the model's verdict -- game-accurate
+                     colour with the detail. At 1 the model's colour comes too. Both ends are valid
+                     pictures, so anywhere between them is one as well. Past 1 it over-saturates -- more
+                     colour than the model asked for, rolled off at the gamut edge rather than clipped.
+
+And two worth knowing:
+
+  Model resolution   Runs the model at a fraction of the frame to save time. Your frame is never
+                     reduced; only the model's own work is done small and enlarged, so the picture
+                     underneath keeps its detail. Broad shading survives this; fine synthesised
+                     structure softens. Above 100% it runs the model above native instead and averages
+                     the result back down -- a cleaner, less noisy pass when you have the headroom (up to
+                     2x, DX12 and Vulkan; pick the downscaler in the dropdown that appears).
+
+  Highlight guard    Caps how much brighter the pass may make any pixel. Lights are where the model has
+                     least to say and where rescaling does the most damage; 2x leaves detail intact
+                     while making the ugly failures impossible.
+
+Intensity, Style, Preset and the local strengths are NVIDIA's own parameters. They are read when the
+model is built, so changing one rebuilds it after a moment's pause.
+
+There is also a debug view. "Difference" shows what the model changed, amplified: a flat grey frame there
+means it is doing nothing. And the pass writes a set of matched before/after frames to a dlssnr-capture
+folder each session (bounded, self-clearing), so claims about what it does can be measured rather than
+argued.
+
+
+A caution
+---------
+
+nvngx_dlssnr.dll is about 165 MB and identifies itself as "NVIDIA DLSSNR" in its file properties. A file
+of that size named nvngx_dlssd.dll is the Neural Rendering model misnamed, not Ray Reconstruction, and
+installing it as Ray Reconstruction will break that instead. Check the version details if you are unsure.
+
+
+DLSS Multi Frame Generation on RTX 40 (unlock)
+----------------------------------------------
+
+This build also carries a port of the MFG Unlock ReShade addon (mavismmg / Dreamt; technique by
+dashdogy), built into OptiScaler. With it, the game's own DLSS Frame Generation can run 3x / 4x / 6x
+on an RTX 40-series card. Nothing on disk is modified: the two RTX 50 checks inside nvngx_dlssg.dll
+are rewritten in memory as the file is loaded, and the interpolation kernel is rebuilt so the extra
+frames carry their own motion.
+
+  1. In OptiScaler.ini add:
+
+       [MfgUnlock]
+       Enabled=true
+
+  2. Turn the game's DLSS Frame Generation on and restart. Pick 3x/4x/6x in the game's menu when it
+     offers them; otherwise set ForceMultiplier=4 (or 3, 6) in the same section, or use the slider in
+     the overlay section "DLSS Multi Frame Generation (RTX 40 unlock)".
+  3. Leave OptiScaler's own Frame Generation off. The game's DLSS-G does the work.
+
+RTX 40 only. Do not use in multiplayer games. If 3x/4x freezes the picture while audio keeps playing,
+set ForceFlipMeteringOff=true and restart. The overlay section and OptiScaler.log (lines starting
+with MfgUnlock::) show what was patched and what the game asked for.
+
+Licence and credits: Licenses/MFGUnlock_LICENSE.txt.
