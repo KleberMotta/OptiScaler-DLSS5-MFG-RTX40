@@ -6,10 +6,9 @@
 name: Scheduled Build
 
 on:
-  schedule:
-    - cron: '0 4 * * *' 
-
+  # Manual runs only in this fork: nothing is scheduled or triggered by pushes.
   workflow_dispatch:
+
 #  push:
 #    branches: [ "master" ]
 #  pull_request:

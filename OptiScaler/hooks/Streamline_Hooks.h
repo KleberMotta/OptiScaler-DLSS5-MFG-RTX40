@@ -140,6 +140,32 @@ class StreamlineHooks
 
     static void updateForceReflex();
     static void updateDlssgOptions();
+    // Highest NVAPI architecture Streamline reported for the adapters, read from the cached caps only --
+    // no DXGI, no NVAPI, no IdentifyGpu -- so it is safe from DllMain and from inside LoadLibrary hooks.
+    // 0 while Streamline has not reported anything yet.
+    static uint32_t reportedSystemCapsArch()
+    {
+        uint32_t highest = 0;
+
+        if (systemCaps != nullptr)
+        {
+            for (auto& adapter : systemCaps->adapters)
+            {
+                if (adapter.architecture > highest)
+                    highest = adapter.architecture;
+            }
+        }
+        else if (systemCapsSl15 != nullptr)
+        {
+            for (uint32_t i = 0; i < systemCapsSl15->gpuCount; i++)
+            {
+                if (systemCapsSl15->architecture[i] > highest)
+                    highest = systemCapsSl15->architecture[i];
+            }
+        }
+
+        return highest;
+    }
 
     static void unhookInterposer();
     static void hookInterposer(HMODULE slInterposer);

@@ -124,6 +124,7 @@ DEFINE_NAME_VECTORS(vk, "vulkan-1");
 
 DEFINE_NAME_VECTORS(nvngx, "nvngx", "_nvngx");
 DEFINE_NAME_VECTORS(nvngxDlss, "nvngx_dlss");
+DEFINE_NAME_VECTORS(nvngxDlssg, "nvngx_dlssg");
 DEFINE_NAME_VECTORS(nvapi, "nvapi64");
 DEFINE_NAME_VECTORS(slInterposer, "sl.interposer");
 DEFINE_NAME_VECTORS(slDlss, "sl.dlss");

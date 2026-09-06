@@ -17,6 +17,7 @@
 #include <sl1_reflex.h>
 #include <magic_enum.hpp>
 #include "detours/detours.h"
+#include <mfgunlock/MfgUnlock.h>
 
 static bool IsSL1AndDLSSGActive()
 {
@@ -107,6 +108,9 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
     LOG_FUNC();
 
     sl::Preferences localPref = pref;
+
+    // DLSS MFG unlock (RTX 40): optionally put the OTA flags back
+    MfgUnlock::OnSlInit(localPref);
 
     if (localPref.logMessageCallback != &streamlineLogCallback)
         o_logCallback = localPref.logMessageCallback;
@@ -1187,7 +1191,13 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     state.dlssgLastSetMode = newOptions.mode;
 
-    return o_slDLSSGSetOptions(viewport, newOptions);
+    // DLSS MFG unlock (RTX 40): raise the request on its way to Streamline when a multiplier is forced
+    if (sl::Result forced {}; MfgUnlock::ForceSetOptions(viewport, newOptions, forced, o_slDLSSGSetOptions))
+        return forced;
+
+    auto setResult = o_slDLSSGSetOptions(viewport, newOptions);
+    MfgUnlock::ObserveNativeSetOptions(newOptions, setResult);
+    return setResult;
 }
 
 sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state,
@@ -1228,6 +1238,9 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
         result = o_slDLSSGGetState(viewport, state, options);
         State::Instance().dlssgGameDMFGSupported = state.bIsDynamicMFGSupported == sl::eTrue;
     }
+
+    // DLSS MFG unlock (RTX 40): telemetry, and the verified ceiling for games that build their menu from it
+    MfgUnlock::AdjustGetState(state, result);
 
     if (!State::Instance().dlssgGameDMFGSupported)
     {
@@ -2079,6 +2092,8 @@ void StreamlineHooks::hookDlssg(HMODULE slDlssg)
 
     if (o_dlssg_slGetPluginFunction)
         unhookDlssg();
+
+    MfgUnlock::OnStreamlineDlssgPluginLoaded(slDlssg);
 
     o_dlssg_slGetPluginFunction =
         reinterpret_cast<PFN_slGetPluginFunction>(KernelBaseProxy::GetProcAddress_()(slDlssg, "slGetPluginFunction"));

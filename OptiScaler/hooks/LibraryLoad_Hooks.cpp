@@ -32,6 +32,7 @@
 #include <fsr4/FSR4Upgrade.h>
 #include <misc/IdentifyGpu.h>
 #include <low_latency/input/input_uell.h>
+#include <mfgunlock/MfgUnlock.h>
 
 // #define LOG_LIB_OPERATIONS
 
@@ -126,6 +127,15 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
                 State::Instance().NGX_OTA_Dlssd = wstring_to_string(lpLibFullPath);
             }
         }
+
+        // DLSS MFG unlock (RTX 40): a driver OTA DLSS-G provider arrives here as an opaque .bin, so the
+        // nvngx_dlssg branch below never sees it. Patch it now, while it is being mapped.
+        if (loadedBin && normalizedPath.contains(L"\\models\\dlssg\\") && MfgUnlock::Active())
+        {
+            LOG_INFO("DLSS-G OTA provider mapped: {}", libNameA);
+            MfgUnlock::OnDlssgProviderLoaded(loadedBin);
+        }
+
         return loadedBin;
     }
 
@@ -176,6 +186,27 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
         }
 
         return dlssModule;
+    }
+
+    // nvngx_dlssg.dll -- the DLSS-G snippet itself (game copy, NVIDIA App override copy or a driver OTA
+    // provider under \models\dlssg\). The MFG unlock must patch it as it is mapped, before NGX reads its
+    // capabilities, so it is loaded here and handed over while still under the loader lock.
+    if ((CheckDllNameW(&libName, &nvngxDlssgNamesW) || normalizedPath.contains(L"\\models\\dlssg\\")) &&
+        MfgUnlock::Active())
+    {
+        auto dlssgSnippet = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
+
+        if (dlssgSnippet != nullptr)
+        {
+            LOG_INFO("DLSS-G snippet mapped: {}", libNameA);
+            MfgUnlock::OnDlssgProviderLoaded(dlssgSnippet);
+        }
+        else
+        {
+            LOG_ERROR("Trying to load dll as nvngx_dlssg: {}", libNameA);
+        }
+
+        return dlssgSnippet;
     }
 
     // sl.dlss_g.dll
@@ -942,6 +973,14 @@ HMODULE LibraryLoadHooks::LoadNvngxDlss(std::wstring originalPath)
 
 void LibraryLoadHooks::CheckModulesInMemory()
 {
+    // DLSS-G snippet already mapped before our hooks (MFG unlock). GetModuleHandle only -- no snapshot here.
+    if (MfgUnlock::Enabled())
+    {
+        if (HMODULE snippet = KernelBaseProxy::GetModuleHandleW_()(L"nvngx_dlssg.dll");
+            snippet != nullptr && MfgUnlock::Active())
+            MfgUnlock::OnDlssgProviderLoaded(snippet);
+    }
+
     if (!StreamlineHooks::isInterposerHooked())
     {
         // hook streamline right away if it's already loaded

@@ -36,6 +36,30 @@
 </div>
 
 
+> ## This fork: DLSS 5 Neural Rendering + DLSS Multi Frame Generation unlock for RTX 40
+>
+> This repository is [Dagherbou's OptiScaler_DLSSNR](https://github.com/Dagherbou/OptiScaler_DLSSNR) (OptiScaler with the DLSS 5 **Neural Rendering** pass) **plus a port of the RTX 40 Multi Frame Generation unlock**, built into OptiScaler itself. No ReShade, no ASI loader, no extra files: the same OptiScaler DLL you already install carries both features.
+>
+> **What the MFG unlock does.** NVIDIA ships `nvngx_dlssg.dll` gated to RTX 50 for anything above 2x. With `[MfgUnlock] Enabled=true`, OptiScaler rewrites, in the mapped image only, the two comparisons against the Blackwell architecture id as the snippet is loaded, so the game's **own** DLSS Frame Generation can advertise and generate 3x / 4x / 6x on an RTX 40. It also rebuilds the interpolation kernel so the extra frames land at their own time instead of all at the midpoint, and can pin the Streamline plugin onto its software pacer where 3x+ would otherwise freeze. Nothing on disk is modified. Tested on an RTX 4070 Ti in Crimson Desert: the game's own menu exposed 3x/4x/6x and 6x delivered ~240 fps from ~60 real frames.
+>
+> **How to use it.**
+> 1. Install OptiScaler as usual (`setup_windows.bat`) and keep the game's `nvngx_dlssg.dll` 310.x beside the executable.
+> 2. Add to `OptiScaler.ini`:
+>    ```ini
+>    [MfgUnlock]
+>    Enabled=true
+>    ```
+> 3. Turn the game's DLSS Frame Generation on and restart. If the game's menu shows 3x/4x/6x, pick it there. If it only has an on/off toggle, set `ForceMultiplier=4` (or 3, 6) in the same section, or use the slider in the overlay section **DLSS Multi Frame Generation (RTX 40 unlock)**.
+> 4. Leave OptiScaler's own Frame Generation (`[FrameGen]`) off: the game's DLSS-G does the work here.
+>
+> Other keys in `[MfgUnlock]` (all documented in `OptiScaler.ini`): `TemporalFix`, `ForceFlipMeteringOff` (enable only if 3x/4x freezes the picture), `RaiseFrameCeiling`, `ForceOTAPlugins`. The overlay section shows whether the gates were rewritten, whether the temporal fix applied, what the game requested and how many frames Streamline actually presented. `OptiScaler.log` (with `LogToFile=true`) carries the same information under `MfgUnlock::`.
+>
+> **Requirements and caveats.** RTX 40-series only (Blackwell does not need it; Turing/Ampere are refused by the snippet itself). Off by default. It modifies NVIDIA code inside the game process: do not use it in multiplayer titles. Higher multipliers add latency and can produce artifacts; a 6x output from a 60 fps base still has the input latency of 60 fps. The temporal-kernel rebuild is validated against the `nvngx_dlssg.dll` builds the original addon supports (310.x, PTX profiles for `main_kernel` and `Kernel_EstimateIntermMvecsScatter`); an unknown build is left untouched and the log says why.
+>
+> **Credits.** The unlock is a port of the [MFG Unlock ReShade addon](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) maintained by mavismmg, forked from [Dreamt's original](https://github.com/ImDreamt/MFGAdaUnlock-RenoDx); the technique originates from [dashdogy's RTX40MFG-Unlock](https://github.com/dashdogy/RTX40MFG-Unlock). Neural Rendering is Dagherbou's work; OptiScaler is by cdozdil and contributors. See `Licenses/MFGUnlock_LICENSE.txt`.
+>
+> **Building.** Visual Studio 2022 with the Windows SDK. The tree vendors the DirectX Agility SDK 1.615.1 headers under `external/directx_agility_sdk/include/directx`, so a machine with only the 10.0.22621 SDK builds too. GitHub Actions in this fork run only when started by hand (`workflow_dispatch`); nothing is scheduled or triggered by pushes.
+
 ## About
 
 **OptiScaler** is a tool that lets you replace upscalers in games that ***already support DLSS2+ / FSR2+ / XeSS*** ($`^1`$), as well as manage ***frame generation*** in already mentioned games _(either by replacing existing FG options or enabling it in DX12 games through experimental ***OptiFG***)_. It also offers extensive customization options for all users, including those with Nvidia GPUs using DLSS.

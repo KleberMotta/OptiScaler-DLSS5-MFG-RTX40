@@ -48,6 +48,7 @@
 #include <version_check.h>
 #include <misc/IdentifyGpu.h>
 #include <sha1/sha1.hpp>
+#include <mfgunlock/MfgUnlock.h>
 
 static std::vector<HMODULE> _asiHandles;
 static std::vector<std::filesystem::directory_entry> _lateLoadingEntries;
@@ -1003,6 +1004,16 @@ static void CheckWorkingMode()
         StreamlineHooks::hookDlssg(slDlssg);
     }
 
+    // DLSS MFG unlock (RTX 40): a snippet mapped before us. GetModuleHandle only -- this runs under the loader lock.
+    if (MfgUnlock::Active())
+    {
+        if (HMODULE snippet = KernelBaseProxy::GetModuleHandleW_()(L"nvngx_dlssg.dll"); snippet != nullptr)
+        {
+            LOG_WARN("nvngx_dlssg.dll already in memory");
+            MfgUnlock::OnDlssgProviderLoaded(snippet);
+        }
+    }
+
     HMODULE slReflex = nullptr;
     slReflex = GetDllNameWModule(&slReflexNamesW);
     if (slReflex != nullptr)
@@ -1833,6 +1844,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::warn("Nexus  : https://www.nexusmods.com/site/mods/986");
         spdlog::warn("If you paid for these files, you've been scammed!");
         spdlog::warn("DO NOT USE IN MULTIPLAYER GAMES");
+
+        // DLSS MFG unlock (RTX 40): needs the config and the logger, nothing else yet
+        MfgUnlock::Init(hModule);
         spdlog::info("");
         spdlog::info("LogLevel: {}", Config::Instance()->LogLevel.value_or_default());
 
@@ -2196,6 +2210,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         {
             NtdllProxy::FreeLibrary_Ldr(v);
         }
+
+        // DLSS MFG unlock (RTX 40): put every patched byte back before anything unloads
+        MfgUnlock::RestoreAll();
 
         spdlog::info("");
         spdlog::info("DLL_PROCESS_DETACH");

@@ -500,6 +500,18 @@ class Config
 
     // --- end DLSS 5 Neural Rendering -------------------------------------------------------------
 
+    // --- DLSS MFG unlock for RTX 40 (OptiScaler/mfgunlock) --- removable as one block --------------
+    // Rewrites nvngx_dlssg.dll's Blackwell gates in memory so the game's own DLSS Frame Generation can
+    // run 3x+ on Ada. Off by default; it modifies NVIDIA code in the process and needs a restart.
+    CustomOptional<bool> MfgUnlockEnabled { false };
+    // 0 = the game decides, 2..6 = raise every slDLSSGSetOptions request to that multiplier.
+    CustomOptional<int> MfgUnlockForceMultiplier { 0 };
+    CustomOptional<bool> MfgUnlockTemporalFix { true };
+    CustomOptional<bool> MfgUnlockForceFlipMeterOff { false };
+    CustomOptional<bool> MfgUnlockRaiseCeiling { false };
+    CustomOptional<bool> MfgUnlockForceOta { false };
+    // --- end DLSS MFG unlock -------------------------------------------------------------------------
+
     // DLSS
     CustomOptional<bool> DLSSEnabled { true };
     CustomOptional<bool> RenderPresetOverride { false };

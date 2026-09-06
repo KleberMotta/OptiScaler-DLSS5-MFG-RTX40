@@ -13,6 +13,7 @@
 #include <sl_pcl.h>
 #include <sl_dlss_g.h>
 #include <sl_reflex.h>
+#include <mfgunlock/MfgUnlock.h>
 
 #pragma comment(lib, "Version.lib")
 
@@ -96,6 +97,10 @@ class StreamlineProxy
             State::Instance().optiSlCommon = NtdllProxy::LoadLibraryExW_Ldr(slCommonPath.c_str(), NULL, NULL);
             auto dlssgPath = localSlPath / L"nvngx_dlssg.dll"; // TODO: maybe some search?
             State::Instance().optiDLSSG = NtdllProxy::LoadLibraryExW_Ldr(dlssgPath.c_str(), NULL, NULL);
+
+            // DLSS MFG unlock (RTX 40): this copy is a DLSS-G snippet too
+            if (State::Instance().optiDLSSG != nullptr && MfgUnlock::Active())
+                MfgUnlock::OnDlssgProviderLoaded(State::Instance().optiDLSSG);
 
             return HookStreamline(_dll);
         }

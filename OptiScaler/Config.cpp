@@ -315,6 +315,18 @@ bool Config::Reload(std::filesystem::path iniPath)
             // Don't enable again if set false because of no nvngx found
             DLSSEnabled.set_from_config(readBool("DLSS", "Enabled"));
 
+            // --- DLSS MFG unlock for RTX 40 (OptiScaler/mfgunlock) ---
+            MfgUnlockEnabled.set_from_config(readBool("MfgUnlock", "Enabled"));
+            MfgUnlockForceMultiplier.set_from_config(readInt("MfgUnlock", "ForceMultiplier"));
+            if (MfgUnlockForceMultiplier.has_value() &&
+                (MfgUnlockForceMultiplier.value() < 0 || MfgUnlockForceMultiplier.value() == 1 ||
+                 MfgUnlockForceMultiplier.value() > 6))
+                MfgUnlockForceMultiplier.reset();
+            MfgUnlockTemporalFix.set_from_config(readBool("MfgUnlock", "TemporalFix"));
+            MfgUnlockForceFlipMeterOff.set_from_config(readBool("MfgUnlock", "ForceFlipMeteringOff"));
+            MfgUnlockRaiseCeiling.set_from_config(readBool("MfgUnlock", "RaiseFrameCeiling"));
+            MfgUnlockForceOta.set_from_config(readBool("MfgUnlock", "ForceOTAPlugins"));
+
             // --- DLSS 5 Neural Rendering (OptiScaler/dlssnr) ---
             DlssNrEnabled.set_from_config(readBool("DlssNr", "Enabled"));
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
@@ -1195,6 +1207,19 @@ bool Config::SaveIni()
     // DLSS
     {
         ini.SetValue("DLSS", "Enabled", GetBoolValue(Instance()->DLSSEnabled.value_for_config()).c_str());
+
+    // --- DLSS MFG unlock for RTX 40 (OptiScaler/mfgunlock) ---
+    ini.SetValue("MfgUnlock", "Enabled", GetBoolValue(Instance()->MfgUnlockEnabled.value_for_config()).c_str());
+    ini.SetValue("MfgUnlock", "ForceMultiplier",
+                 GetIntValue(Instance()->MfgUnlockForceMultiplier.value_for_config()).c_str());
+    ini.SetValue("MfgUnlock", "TemporalFix",
+                 GetBoolValue(Instance()->MfgUnlockTemporalFix.value_for_config()).c_str());
+    ini.SetValue("MfgUnlock", "ForceFlipMeteringOff",
+                 GetBoolValue(Instance()->MfgUnlockForceFlipMeterOff.value_for_config()).c_str());
+    ini.SetValue("MfgUnlock", "RaiseFrameCeiling",
+                 GetBoolValue(Instance()->MfgUnlockRaiseCeiling.value_for_config()).c_str());
+    ini.SetValue("MfgUnlock", "ForceOTAPlugins",
+                 GetBoolValue(Instance()->MfgUnlockForceOta.value_for_config()).c_str());
 
     // --- DLSS 5 Neural Rendering (OptiScaler/dlssnr) ---
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
